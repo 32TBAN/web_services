@@ -1,14 +1,14 @@
 <resources>
     <string name="app_name">webServices</string>
-    <string name="api_key">Use your own OpenWeatherMap.org API key for this resource’s value.</string>
-    <string name="web_service_url">https://samples.openweathermap.org/data/2.5/forecast?id=524901&appid=kevin</string>
+    <string name="api_key">b891b1f078c0d4cb17384a09dc1db3ff</string>
+    <string name="web_service_url">http://api.openweathermap.org/data/2.5/forecast?q=</string>
     <string name="invalid_url">URL Invalida</string>
     <string name="weather_condition_image">Una representación gráfica de las condiciones climáticas.</string>
     <string name="high_temp">Alto: %s</string>
     <string name="low_temp">Bajo: %s</string>
     <string name="day_description">%1$s: %2$s</string>
     <string name="humidity">Humedad: %s</string>
-    <string name="hint_text">Ingrese la ciudad (por ejemplo, Boston, MA, EE. UU.)</string>
+    <string name="hint_text">Ingrese la ciudad (ejem., Boston, MA, EE. UU.)</string>
     <string name="read_error">No se pueden leer los datos meteorológicos</string>
     <string name="connect_error">No se puede conectar a OpenWeatherMap.org</string>
 </resources>

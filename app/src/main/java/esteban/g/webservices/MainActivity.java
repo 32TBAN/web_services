@@ -78,8 +78,8 @@ public class MainActivity extends AppCompatActivity {
         String baseUrl = getString(R.string.web_service_url);
 
         try {
-            String urlString = baseUrl + URLEncoder.encode(city, "UTF-8") +
-                    "&units=imperial&cnt=16&APPID=" + apiKey;
+            String urlString = baseUrl+URLEncoder.encode(city, "UTF-8") +
+                    "&appid=" + apiKey;
             return new URL(urlString);
         } catch (Exception e) {
              e.printStackTrace();
@@ -142,14 +142,14 @@ public class MainActivity extends AppCompatActivity {
 
                  for (int i = 0; i < list.length(); i++) {
                      JSONObject day = list.getJSONObject(i);
-                     JSONObject temperatures = day.getJSONObject("temp");
+                     JSONObject temperatures = day.getJSONObject("main");
                      JSONObject weather =
                              day.getJSONArray("weather").getJSONObject(0);
                      weatherList.add(new Weather(
                              day.getLong("dt"), // date/time timestamp
-                             temperatures.getDouble("min"), // minimum temperature
-                             temperatures.getDouble("max"), // maximum temperature
-                             day.getDouble("humidity"), // percent humidity
+                             temperatures.getDouble("temp_min"), // minimum temperature
+                             temperatures.getDouble("temp_max"), // maximum temperature
+                             temperatures.getDouble("humidity"), // percent humidity
                              weather.getString("description"), // weather conditions
                              weather.getString("icon"))); // icon nam
                  }

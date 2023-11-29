@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="BlueFab" parent="Widget.MaterialComponents.FloatingActionButton">
+        <item name="backgroundTint">@android:color/holo_blue_light</item>
+        <item name="shapeAppearanceOverlay">@style/ShapeAppearanceOverlay.MyApp.Rounded</item>
+    </style>
+
+    <style name="ShapeAppearanceOverlay.MyApp.Rounded" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item> <!-- Ajusta este valor para cambiar el radio del redondeo -->
+    </style>
+
+</resources>

@@ -18,6 +18,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 public class WeatherArrayAdapter extends ArrayAdapter<Weather> {
+    private static class ViewHolder {
+        ImageView conditionImageView;
+        TextView dayTextView;
+        TextView lowTextView;
+        TextView hiTextView;
+        TextView humidityTextView;
+
+    }
  private Map<String, Bitmap> bitmaps = new HashMap<>();
 
  // constructor to initialize superclass inherited members
@@ -30,23 +38,24 @@ public class WeatherArrayAdapter extends ArrayAdapter<Weather> {
  public View getView(int position, View convertView, ViewGroup parent){
    Weather day = getItem(position);
 
-  ViewHolder viewHolder = new ViewHolder();
+  ViewHolder viewHolder;
 
    if (convertView == null) { // no reusable ViewHolder, so create one
-     LayoutInflater inflater = LayoutInflater.from(getContext());
-     convertView =
+       viewHolder = new ViewHolder();
+       LayoutInflater inflater = LayoutInflater.from(getContext());
+       convertView =
             inflater.inflate(R.layout.list_item, parent, false);
-     viewHolder.conditionImageView =
+       viewHolder.conditionImageView =
             (ImageView) convertView.findViewById(R.id.conditionImageView);
-     viewHolder.dayTextView =
+       viewHolder.dayTextView =
             (TextView) convertView.findViewById(R.id.dayTextView);
-     viewHolder.lowTextView =
+       viewHolder.lowTextView =
             (TextView) convertView.findViewById(R.id.lowTextView);
-     viewHolder.hiTextView =
+       viewHolder.hiTextView =
             (TextView) convertView.findViewById(R.id.hiTextView);
-     viewHolder.humidityTextView =
+       viewHolder.humidityTextView =
             (TextView) convertView.findViewById(R.id.humidityTextView);
-
+       convertView.setTag(viewHolder);
     } else { // reuse existing ViewHolder stored as the list item's tag
        viewHolder = (ViewHolder) convertView.getTag();
     }
@@ -73,15 +82,50 @@ public class WeatherArrayAdapter extends ArrayAdapter<Weather> {
            context.getString(R.string.humidity, day.humidity));
 
    return convertView; // return completed list item to display
-   }
+ }
 
-    private static class ViewHolder {
-        ImageView conditionImageView;
-        TextView dayTextView;
-        TextView lowTextView;
-        TextView hiTextView;
-        TextView humidityTextView;
+    public class LoadImageTask extends AsyncTask<String, Void, Bitmap> {
+        private ImageView imageView;
+        // store ImageView on which to set the downloaded Bitmap
+        public LoadImageTask(ImageView imageView) {
+            this.imageView = imageView;
+        }
 
+        // load image; params[0] is the String URL representing the image
+        @Override
+        protected Bitmap doInBackground(String... params){
+            Bitmap bitmap = null;
+            HttpURLConnection connection = null;
+
+            try {
+                URL url = new URL(params[0]); // create URL for image
+
+                // open an HttpURLConnection, get its InputStream
+                // and download the image
+                connection = (HttpURLConnection) url.openConnection();
+                try (InputStream inputStream = connection.getInputStream()) {
+                    bitmap = BitmapFactory.decodeStream(inputStream);
+                    bitmaps.put(params[0], bitmap);
+                }
+                catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+            catch (Exception e) {
+                e.printStackTrace();
+            }
+            finally {
+                connection.disconnect();
+            }
+
+            return bitmap;
+        }
+
+        // set weather condition image in list item
+        @Override
+        protected void onPostExecute(Bitmap bitmap){
+            imageView.setImageBitmap(bitmap);
+        }
     }
 
 }
