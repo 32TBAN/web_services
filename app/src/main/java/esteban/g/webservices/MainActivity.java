@@ -1,369 +1,165 @@
 package esteban.g.webservices;
 
-import androidx.appcompat.app.AppCompatActivity;
-
+import android.content.Context;
+import android.os.AsyncTask;
 import android.os.Bundle;
-import android.widget.ImageView;
-import android.widget.PopupMenu;
-import android.widget.TextView;
 
-import com.google.android.gms.location.FusedLocationProviderClient;
+import android.view.View;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.EditText;
+import android.widget.ListView;
 
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
+
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.snackbar.Snackbar;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
 import java.io.IOException;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.GregorianCalendar;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLEncoder;
+import java.util.ArrayList;
+import java.util.List;
 
-public class MainActivity extends AppCompatActivity implements PopupMenu.OnMenuItemClickListener{
-    TextView city,temp,main,humidity,wind,realFeel,time;
-    ImageView weatherImage;
-    private FusedLocationProviderClient client;
-    static int indexfor=5;
-    static String lat;
-    static String lon;
-
+public class MainActivity extends AppCompatActivity {
+    private List<Weather> weatherList = new ArrayList<>();
+    private WeatherArrayAdapter weatherArrayAdapter;
+    private ListView weatherListView;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
 
-        city = findViewById(R.id.id_city);
-        temp = findViewById(R.id.id_degree);
-        main = findViewById(R.id.id_main);
-        humidity = findViewById(R.id.id_humidity);
-        wind = findViewById(R.id.id_wind);
-        realFeel = findViewById(R.id.id_realfeel);
-        weatherImage = findViewById(R.id.id_weatherImage);
-        client = LocationServices.getFusedLocationProviderClient(this);
-        time=findViewById(R.id.id_time);
+        weatherListView = (ListView) findViewById(R.id.weatherListView);
+        weatherArrayAdapter = new WeatherArrayAdapter(this, weatherList);
+        weatherListView.setAdapter(weatherArrayAdapter);
 
-        if (ActivityCompat.checkSelfPermission(MainActivity.this, ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED){
-            if (ActivityCompat.shouldShowRequestPermissionRationale(MainActivity.this, ACCESS_FINE_LOCATION)){
+        FloatingActionButton fab =
+                 (FloatingActionButton) findViewById(R.id.fab);
 
-                ActivityCompat.requestPermissions(MainActivity.this,
-                        new String[]{ACCESS_FINE_LOCATION}, 1);
-            }else{
-                ActivityCompat.requestPermissions(MainActivity.this,
-                        new String[]{ACCESS_FINE_LOCATION}, 1);
-            }
-        }
-        client.getLastLocation().addOnSuccessListener(MainActivity.this, new OnSuccessListener<Location>() {
+        fab.setOnClickListener(new View.OnClickListener(){
             @Override
-            public void onSuccess(Location location) {
-                if (location!=null){
-                    double latitude=Math.round(location.getLatitude() * 100.0)/100.0;
-                    lat= String.valueOf(latitude);
+             public void onClick(View view) {
+                 // get text from locationEditText and create web service URL
+                 EditText locationEditText =
+                         (EditText) findViewById(R.id.locationEditText);
+                 URL url = createURL(locationEditText.getText().toString());
 
-                    double longitude=Math.round(location.getLongitude() * 100.0)/100.0;
-                    lon= String.valueOf(longitude);
-
-                    WeatherByLatLon(lat,lon);
-                }else{
-                    WeatherByCityName("London");
+                 // hide keyboard and initiate a GetWeatherTask to download
+                 // weather data from OpenWeatherMap.org in a separate thread
+                 if (url != null) {
+                     dismissKeyboard(locationEditText);
+                     GetWeatherTask getLocalWeatherTask = new GetWeatherTask();
+                     getLocalWeatherTask.execute(url);
+                } else {
+                    Snackbar.make(findViewById(R.id.coordinatorLayout),
+                            R.string.invalid_url, Snackbar.LENGTH_LONG).show();
                 }
-
-            }
-        });
-
-
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults){
-        switch (requestCode){
-            case 1: {
-                if (grantResults.length>0 && grantResults[0] == PackageManager.PERMISSION_GRANTED){
-                    if (ActivityCompat.checkSelfPermission(MainActivity.this,
-                            Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED){
-                        Toast.makeText(this, "Permission Granted", Toast.LENGTH_SHORT).show();
-                        client.getLastLocation().addOnSuccessListener(this, new OnSuccessListener<Location>() {
-                            @Override
-                            public void onSuccess(Location location) {
-                                if (location!=null){
-
-                                    double latitude=Math.round(location.getLatitude() * 100.0)/100.0;
-                                    lat= String.valueOf(latitude);
-
-                                    double longitude=Math.round(location.getLongitude() * 100.0)/100.0;
-                                    lon= String.valueOf(longitude);
-
-                                    WeatherByLatLon(lat,lon);
-                                }
-                            }
-                        });
-                    }
-                }else{
-                    Toast.makeText(this, "Permission Denied", Toast.LENGTH_SHORT).show();
-                }
-                return;
-            }
+            }});
         }
+
+    private void dismissKeyboard(View view) {
+        InputMethodManager imm = (InputMethodManager) getSystemService(
+                Context.INPUT_METHOD_SERVICE);
+        imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
     }
 
-    private void WeatherByCityName(String city){
-        OkHttpClient client=new OkHttpClient();
-        Request request=new Request.Builder()
-                .url("https://api.openweathermap.org/data/2.5/forecast?q="+city+"&appid="+BuildConfig.ApiKey+"&units=metric")
-                .get().build();
-        StrictMode.ThreadPolicy policy=new StrictMode.ThreadPolicy.Builder().permitAll().build();
-        StrictMode.setThreadPolicy(policy);
+    private URL createURL(String city) {
+        String apiKey = getString(R.string.api_key);
+        String baseUrl = getString(R.string.web_service_url);
+
         try {
-            Response response=client.newCall(request).execute();
-            client.newCall(request).enqueue(new Callback() {
-                @Override
-                public void onFailure(@NotNull Call call, @NotNull IOException e) {
+            String urlString = baseUrl + URLEncoder.encode(city, "UTF-8") +
+                    "&units=imperial&cnt=16&APPID=" + apiKey;
+            return new URL(urlString);
+        } catch (Exception e) {
+             e.printStackTrace();
+        }
+         return null;
+    }
 
-                }
+    private class GetWeatherTask
+            extends AsyncTask<URL, Void, JSONObject>{
+        @Override
+        protected JSONObject doInBackground(URL... params){
+            HttpURLConnection connection = null;
+            try {
+                connection = (HttpURLConnection) params[0].openConnection();
+                int response = connection.getResponseCode();
+                if (response == HttpURLConnection.HTTP_OK){
+                    StringBuilder builder = new StringBuilder();
+                    try (BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(connection.getInputStream()))) {
+                        String line;
 
-                @Override
-                public void onResponse(@NotNull Call call, @NotNull Response response) throws IOException {
-                    String data=response.body().string();
-                    try {
-
-                        JSONObject json=new JSONObject(data);
-                        JSONObject city=json.getJSONObject("city");
-                        JSONObject coord=city.getJSONObject("coord");
-                        String lat =coord.getString("lat");
-                        String lon=coord.getString("lon");
-
-                        WeatherByLatLon(lat,lon);
-
-                    }catch (JSONException e){
+                         while ((line = reader.readLine()) != null) {
+                             builder.append(line);
+                         }
+                    }catch (IOException e) {
+                        Snackbar.make(findViewById(R.id.coordinatorLayout),
+                                R.string.read_error, Snackbar.LENGTH_LONG).show();
                         e.printStackTrace();
                     }
+
+                    return new JSONObject(builder.toString());
+                }else {
+                    Snackbar.make(findViewById(R.id.coordinatorLayout),
+                             R.string.connect_error, Snackbar.LENGTH_LONG).show();
                 }
-            });
-        }catch (IOException e){
-            e.printStackTrace();
+            }catch (Exception e) {
+                Snackbar.make(findViewById(R.id.coordinatorLayout),
+                         R.string.connect_error, Snackbar.LENGTH_LONG).show();
+                e.printStackTrace();
+            }finally {
+                connection.disconnect();
+            }
+            return null;
+        }
+
+
+        @Override
+        protected void onPostExecute(JSONObject weather){
+            convertJSONtoArrayList(weather);
+            weatherArrayAdapter.notifyDataSetChanged(); // rebind to ListView
+            weatherListView.smoothScrollToPosition(0);
+        }
+
+        private void convertJSONtoArrayList(JSONObject forecast) {
+             weatherList.clear(); // clear old weather data
+
+             try {
+                 // get forecast's "list" JSONArray
+                 JSONArray list = forecast.getJSONArray("list");
+
+                 for (int i = 0; i < list.length(); i++) {
+                     JSONObject day = list.getJSONObject(i);
+                     JSONObject temperatures = day.getJSONObject("temp");
+                     JSONObject weather =
+                             day.getJSONArray("weather").getJSONObject(0);
+                     weatherList.add(new Weather(
+                             day.getLong("dt"), // date/time timestamp
+                             temperatures.getDouble("min"), // minimum temperature
+                             temperatures.getDouble("max"), // maximum temperature
+                             day.getDouble("humidity"), // percent humidity
+                             weather.getString("description"), // weather conditions
+                             weather.getString("icon"))); // icon nam
+                 }
+                 
+             }catch (Exception e){
+                 e.printStackTrace();
+             }
         }
     }
 
 
-    private void WeatherByLatLon(String lat,String lon){
-        OkHttpClient client=new OkHttpClient();
-        Request request=new Request.Builder()
-                .url("https://api.openweathermap.org/data/2.5/forecast?lat="+lat+"&lon="+lon+"&appid="+BuildConfig.ApiKey+"&units=metric")
-                .get().build();
-        StrictMode.ThreadPolicy policy=new StrictMode.ThreadPolicy.Builder().permitAll().build();
-        StrictMode.setThreadPolicy(policy);
-        try {
-            Response response=client.newCall(request).execute();
-            client.newCall(request).enqueue(new Callback() {
-                @Override
-                public void onFailure(@NotNull Call call, @NotNull IOException e) {
 
-                }
-
-                @Override
-                public void onResponse(@NotNull Call call, @NotNull Response response) throws IOException {
-                    String data=response.body().string();
-                    try {
-
-                        JSONObject json=new JSONObject(data);
-                        TextView[] forecast = new TextView[5];
-                        TextView[] forecastTemp=new TextView[5];
-                        ImageView[] forecastIcons=new ImageView[5];
-                        IdAssign(forecast,forecastTemp,forecastIcons);
-
-                        indexfor=5;
-                        for (int i=0;i<forecast.length;i++){
-                            forecastCal(forecast[i],forecastTemp[i],forecastIcons[i],indexfor,json);
-                        }
-
-                        JSONArray list=json.getJSONArray("list");
-                        JSONObject objects = list.getJSONObject(0);
-                        JSONArray array=objects.getJSONArray("weather");
-                        JSONObject object=array.getJSONObject(0);
-
-                        String description=object.getString("description");
-                        String icons=object.getString("icon");
-
-                        Date currentDate=new Date();
-                        String dateString=currentDate.toString();
-                        String[] dateSplit=dateString.split(" ");
-                        String date=dateSplit[0]+", "+dateSplit[1] +" "+dateSplit[2];
-
-                        JSONObject Main=objects.getJSONObject("main");
-                        double temparature=Main.getDouble("temp");
-                        String Temp=Math.round(temparature)+"°C";
-                        double Humidity=Main.getDouble("humidity");
-                        String hum=Math.round(Humidity)+"%";
-                        double FeelsLike=Main.getDouble("feels_like");
-                        String feelsValue=Math.round(FeelsLike)+"°";
-
-                        JSONObject Wind=objects.getJSONObject("wind");
-                        String windValue=Wind.getString("speed")+" "+"km/h";
-
-                        JSONObject CityObject=json.getJSONObject("city");
-                        String City=CityObject.getString("name");
-
-                        setDataText(city,City);
-                        setDataText(temp,Temp);
-                        setDataText(main,description);
-                        setDataImage(weatherImage,icons);
-                        setDataText(time,date);
-                        setDataText(humidity,hum);
-                        setDataText(realFeel,feelsValue);
-                        setDataText(wind,windValue);
-
-                    }catch (JSONException e){
-                        e.printStackTrace();
-                    }
-                }
-            });
-        }catch (IOException e){
-            e.printStackTrace();
-        }
-    }
-
-    private void setDataText(final TextView text, final String value){
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                text.setText(value);
-            }
-        });
-    }
-    private void setDataImage(final ImageView ImageView, final String value){
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                switch (value){
-                    case "01d": ImageView.setImageDrawable(getResources().getDrawable(R.drawable.w01d)); break;
-                    case "01n": ImageView.setImageDrawable(getResources().getDrawable(R.drawable.w01d)); break;
-                    case "02d": ImageView.setImageDrawable(getResources().getDrawable(R.drawable.w02d)); break;
-                    case "02n": ImageView.setImageDrawable(getResources().getDrawable(R.drawable.w02d)); break;
-                    case "03d": ImageView.setImageDrawable(getResources().getDrawable(R.drawable.w03d)); break;
-                    case "03n": ImageView.setImageDrawable(getResources().getDrawable(R.drawable.w03d)); break;
-                    case "04d": ImageView.setImageDrawable(getResources().getDrawable(R.drawable.w04d)); break;
-                    case "04n": ImageView.setImageDrawable(getResources().getDrawable(R.drawable.w04d)); break;
-                    case "09d": ImageView.setImageDrawable(getResources().getDrawable(R.drawable.w09d)); break;
-                    case "09n": ImageView.setImageDrawable(getResources().getDrawable(R.drawable.w09d)); break;
-                    case "10d": ImageView.setImageDrawable(getResources().getDrawable(R.drawable.w10d)); break;
-                    case "10n": ImageView.setImageDrawable(getResources().getDrawable(R.drawable.w10d)); break;
-                    case "11d": ImageView.setImageDrawable(getResources().getDrawable(R.drawable.w11d)); break;
-                    case "11n": ImageView.setImageDrawable(getResources().getDrawable(R.drawable.w11d)); break;
-                    case "13d": ImageView.setImageDrawable(getResources().getDrawable(R.drawable.w13d)); break;
-                    case "13n": ImageView.setImageDrawable(getResources().getDrawable(R.drawable.w13d)); break;
-                    default:ImageView.setImageDrawable(getResources().getDrawable(R.drawable.w03d));
-
-                }
-            }
-        });
-    }
-
-
-    private void forecastCal(TextView forecast,TextView forecastTemp,ImageView forecastIcons,int index,JSONObject json) throws JSONException {
-        JSONArray list=json.getJSONArray("list");
-        for (int i=index; i<list.length(); i++) {
-            JSONObject object = list.getJSONObject(i);
-
-            String dt=object.getString("dt_txt"); // dt_text.format=2020-06-26 12:00:00
-            String[] a=dt.split(" ");
-            if ((i==list.length()-1) && !a[1].equals("12:00:00")){
-                String[] dateSplit=a[0].split("-");
-                Calendar calendar=new GregorianCalendar(Integer.parseInt(dateSplit[0]),Integer.parseInt(dateSplit[1])-1,Integer.parseInt(dateSplit[2]));
-                Date forecastDate=calendar.getTime();
-                String dateString=forecastDate.toString();
-                String[] forecastDateSplit=dateString.split(" ");
-                String date=forecastDateSplit[0]+", "+forecastDateSplit[1] +" "+forecastDateSplit[2];
-                setDataText(forecast, date);
-
-                JSONObject Main=object.getJSONObject("main");
-                double temparature=Main.getDouble("temp");
-                String Temp=Math.round(temparature)+"°";
-                setDataText(forecastTemp,Temp);
-
-                JSONArray array=object.getJSONArray("weather");
-                JSONObject object1=array.getJSONObject(0);
-                String icons=object1.getString("icon");
-                setDataImage(forecastIcons,icons);
-
-                return;
-            }
-            else if (a[1].equals("12:00:00")){
-
-                String[] dateSplit=a[0].split("-");
-                Calendar calendar=new GregorianCalendar(Integer.parseInt(dateSplit[0]),Integer.parseInt(dateSplit[1])-1,Integer.parseInt(dateSplit[2]));
-                Date forecastDate=calendar.getTime();
-                String dateString=forecastDate.toString();
-                String[] forecastDateSplit=dateString.split(" ");
-                String date=forecastDateSplit[0]+", "+forecastDateSplit[1] +" "+forecastDateSplit[2];
-                setDataText(forecast, date);
-
-
-                JSONObject Main=object.getJSONObject("main");
-                double temparature=Main.getDouble("temp");
-                String Temp=Math.round(temparature)+"°";
-                setDataText(forecastTemp,Temp);
-
-                JSONArray array=object.getJSONArray("weather");
-                JSONObject object1=array.getJSONObject(0);
-                String icons=object1.getString("icon");
-                setDataImage(forecastIcons,icons);
-
-
-                indexfor=i+1;
-                return;
-            }
-        }
-    }
-
-    private void IdAssign(TextView[] forecast,TextView[] forecastTemp,ImageView[] forecastIcons){
-        forecast[0]=findViewById(R.id.id_forecastDay1);
-        forecast[1]=findViewById(R.id.id_forecastDay2);
-        forecast[2]=findViewById(R.id.id_forecastDay3);
-        forecast[3]=findViewById(R.id.id_forecastDay4);
-        forecast[4]=findViewById(R.id.id_forecastDay5);
-        forecastTemp[0]=findViewById(R.id.id_forecastTemp1);
-        forecastTemp[1]=findViewById(R.id.id_forecastTemp2);
-        forecastTemp[2]=findViewById(R.id.id_forecastTemp3);
-        forecastTemp[3]=findViewById(R.id.id_forecastTemp4);
-        forecastTemp[4]=findViewById(R.id.id_forecastTemp5);
-        forecastIcons[0]=findViewById(R.id.id_forecastIcon1);
-        forecastIcons[1]=findViewById(R.id.id_forecastIcon2);
-        forecastIcons[2]=findViewById(R.id.id_forecastIcon3);
-        forecastIcons[3]=findViewById(R.id.id_forecastIcon4);
-        forecastIcons[4]=findViewById(R.id.id_forecastIcon5);
-
-    }
-
-    public void showPopup(View v){
-        PopupMenu popup=new PopupMenu(this,v);
-        popup.setOnMenuItemClickListener(this);
-        popup.inflate(R.menu.popup_menu);
-        popup.show();
-    }
-
-
-    @Override
-    public boolean onMenuItemClick(MenuItem item) {
-        switch (item.getItemId()){
-            case R.id.id_currentLocation:
-                WeatherByLatLon(lat,lon);
-                return true;
-            case R.id.id_otherCity:
-                Intent intent=new Intent(MainActivity.this,CitySearch.class);
-                startActivityForResult(intent,1);
-            default:
-                return false;
-
-        }
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-
-        if (requestCode == 1) {
-            if(resultCode == RESULT_OK){
-                String citySearched=data.getStringExtra("result");
-                WeatherByCityName(citySearched);
-            }
-            if (resultCode == Activity.RESULT_CANCELED) {
-
-            }
-        }
-    }
 }
