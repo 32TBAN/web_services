@@ -11,122 +11,139 @@ import android.widget.ArrayAdapter;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-public class WeatherArrayAdapter extends ArrayAdapter<Weather> {
+import java.util.List;
+
+public class WeatherArrayAdapter extends ArrayAdapter<Weather>{
+
+    /**
+     * Class aiding in reuse of view removed from the screen when scrolling through list elements.
+     */
     private static class ViewHolder {
         ImageView conditionImageView;
         TextView dayTextView;
         TextView lowTextView;
         TextView hiTextView;
         TextView humidityTextView;
-
-    }
- private Map<String, Bitmap> bitmaps = new HashMap<>();
-
- // constructor to initialize superclass inherited members
- public WeatherArrayAdapter(Context context, List<Weather> forecast) {
-  super(context, -1, forecast);
- }
-
- // creates the custom views for the ListView's items
- @Override
- public View getView(int position, View convertView, ViewGroup parent){
-   Weather day = getItem(position);
-
-  ViewHolder viewHolder;
-
-   if (convertView == null) { // no reusable ViewHolder, so create one
-       viewHolder = new ViewHolder();
-       LayoutInflater inflater = LayoutInflater.from(getContext());
-       convertView =
-            inflater.inflate(R.layout.list_item, parent, false);
-       viewHolder.conditionImageView =
-            (ImageView) convertView.findViewById(R.id.conditionImageView);
-       viewHolder.dayTextView =
-            (TextView) convertView.findViewById(R.id.dayTextView);
-       viewHolder.lowTextView =
-            (TextView) convertView.findViewById(R.id.lowTextView);
-       viewHolder.hiTextView =
-            (TextView) convertView.findViewById(R.id.hiTextView);
-       viewHolder.humidityTextView =
-            (TextView) convertView.findViewById(R.id.humidityTextView);
-       convertView.setTag(viewHolder);
-    } else { // reuse existing ViewHolder stored as the list item's tag
-       viewHolder = (ViewHolder) convertView.getTag();
     }
 
-   // if weather condition icon already downloaded, use it;
-   // otherwise, download icon in a separate thread
-   if (bitmaps.containsKey(day.iconURL)) {
-    viewHolder.conditionImageView.setImageBitmap(
-            bitmaps.get(day.iconURL));
-    } else {
-       // download and display weather condition image
-       new LoadImageTask(viewHolder.conditionImageView).execute(
-               day.iconURL);
+    // contains the downloaded bitmaps enabling their reuse
+    private Map<String, Bitmap> bitmaps = new HashMap<>();
+
+    public WeatherArrayAdapter(Context context, List<Weather> forecast){
+        super(context, -1, forecast);
     }
-   // get other data from Weather object and place into views
-   Context context = getContext(); // for loading String resources
-   viewHolder.dayTextView.setText(context.getString(
-           R.string.day_description, day.dayOfWeek, day.description));
-   viewHolder.lowTextView.setText(
-           context.getString(R.string.low_temp, day.minTemp));
-  viewHolder.hiTextView.setText(
-           context.getString(R.string.high_temp, day.maxTemp));
-   viewHolder.humidityTextView.setText(
-           context.getString(R.string.humidity, day.humidity));
 
-   return convertView; // return completed list item to display
- }
+    // creates modified views for ListView elements
+    @Override
+    public View getView(int position, View convertView, ViewGroup parent) {
+        // get access to a Weather object proper to given element of ListView
+        Weather day = getItem(position);
 
-    public class LoadImageTask extends AsyncTask<String, Void, Bitmap> {
-        private ImageView imageView;
-        // store ImageView on which to set the downloaded Bitmap
+        ViewHolder viewHolder; // object relating to list elements' views
+
+        // check if a reusable ViewHolder object exists attached to the element of the ListView
+        // list removed from screen; if such an object does not exist, then create new ViewHolder object
+        if (convertView == null) {
+            // no reusable ViewHolder object
+            // create new ViewHolder object
+            viewHolder = new ViewHolder();
+            LayoutInflater inflater = LayoutInflater.from(getContext());
+            convertView = inflater.inflate(R.layout.list_item, parent, false);
+            viewHolder.conditionImageView = (ImageView) convertView.findViewById(R.id.conditionImageView);
+            viewHolder.dayTextView = (TextView) convertView.findViewById(R.id.dayTextView);
+            viewHolder.lowTextView = (TextView) convertView.findViewById(R.id.lowTextView);
+            viewHolder.hiTextView = (TextView) convertView.findViewById(R.id.hiTextView);
+            viewHolder.humidityTextView = (TextView) convertView.findViewById(R.id.humidityTextView);
+            convertView.setTag(viewHolder);
+        }
+        else {
+            // reuse an existing ViewHolder object contained as a tag of the list element
+            viewHolder = (ViewHolder) convertView.getTag();
+        }
+
+        // if an icon depicting given weather has already been downloaded then us it;
+        // otherwise, download the icon on a separate thread
+        if (bitmaps.containsKey(day.iconURL)) {
+            viewHolder.conditionImageView.setImageBitmap(bitmaps.get(day.iconURL));
+        }
+        else {
+            // download and display image depicting weather conditions
+            new LoadImageTask(viewHolder.conditionImageView).execute(day.iconURL);
+        }
+
+        // read out the remaining data from the Weather object and place them in appropriate views
+        Context context = getContext(); // for loading string resources
+        viewHolder.dayTextView.setText(context.getString(R.string.day_description, day.dayOfWeek, day.description));
+        viewHolder.lowTextView.setText(context.getString(R.string.low_temp, day.minTemp));
+        viewHolder.hiTextView.setText(context.getString(R.string.high_temp, day.maxTemp));
+        viewHolder.humidityTextView.setText(context.getString(R.string.humidity, day.humidity));
+
+        return convertView; // return a complete list of elements to display
+    }
+
+    @Override
+    public int getCount() {
+        int count = super.getCount();
+        return count;
+    }
+
+    // AsyncTask subclass loading the icon depicting weather conditions using a separate thread.
+    private class LoadImageTask extends AsyncTask<String, Void, Bitmap> {
+        private ImageView imageView;    // displays icon
+
+        // hold the ImageView object where the downloaded bitmap should be displayed
         public LoadImageTask(ImageView imageView) {
             this.imageView = imageView;
         }
 
-        // load image; params[0] is the String URL representing the image
+        // load the image; params[0] should be a string containing the URL address of the image
         @Override
-        protected Bitmap doInBackground(String... params){
+        protected Bitmap doInBackground(String... params) {
             Bitmap bitmap = null;
             HttpURLConnection connection = null;
 
+            // open HttpURLConnection, gain access to the InputStream stream and download the image
             try {
-                URL url = new URL(params[0]); // create URL for image
+                URL url = new URL(params[0]);
 
-                // open an HttpURLConnection, get its InputStream
-                // and download the image
                 connection = (HttpURLConnection) url.openConnection();
+
                 try (InputStream inputStream = connection.getInputStream()) {
                     bitmap = BitmapFactory.decodeStream(inputStream);
-                    bitmaps.put(params[0], bitmap);
+                    bitmaps.put(params[0], bitmap); // save in cache
                 }
                 catch (Exception e) {
                     e.printStackTrace();
                 }
+
             }
             catch (Exception e) {
                 e.printStackTrace();
             }
             finally {
-                connection.disconnect();
+                if (connection != null) {
+                    connection.disconnect();
+                }
             }
 
             return bitmap;
         }
 
-        // set weather condition image in list item
+        // attach image to the list element
         @Override
-        protected void onPostExecute(Bitmap bitmap){
+        protected void onPostExecute(Bitmap bitmap) {
             imageView.setImageBitmap(bitmap);
         }
-    }
 
+    }
 }
+
 
